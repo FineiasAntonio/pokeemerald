@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <execinfo.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "global.h"
 #include "main.h"
@@ -60,7 +61,6 @@ static void MapAddressSpace(void)
         { VRAM,              VRAM_SIZE,         "VRAM"  },
         { OAM,               OAM_SIZE,          "OAM"   },
         { GPIO_REGION_START,  GPIO_REGION_SIZE,  "GPIO"  },
-        { FLASH_REGION_START, FLASH_REGION_SIZE, "FLASH" },
     };
 
     for (u32 i = 0; i < ARRAY_COUNT(regions); i++)
@@ -74,6 +74,21 @@ static void MapAddressSpace(void)
             fprintf(stderr, "could not map %s at %08x\n", regions[i].name, regions[i].addr);
             exit(1);
         }
+    }
+
+    int fd = open("pokeemerald.sav", O_RDWR | O_CREAT, 0644);
+    if (fd < 0 || ftruncate(fd, FLASH_REGION_SIZE) != 0)
+    {
+        fprintf(stderr, "could not open pokeemerald.sav\n");
+        exit(1);
+    }
+    void *flash = mmap((void *)FLASH_REGION_START, FLASH_REGION_SIZE,
+                       PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED_NOREPLACE, fd, 0);
+    close(fd);
+    if (flash == MAP_FAILED)
+    {
+        fprintf(stderr, "could not map FLASH at %08x\n", FLASH_REGION_START);
+        exit(1);
     }
 }
 

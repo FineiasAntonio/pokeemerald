@@ -10,8 +10,26 @@ static const struct FlashSetupInfo *const sSetupInfos[] =
     &DefaultFlash
 };
 
+#ifdef PORTABLE
+u16 PortableProgramFlashByte(u16 sectorNum, u32 offset, u8 data);
+u16 PortableProgramFlashSector(u16 sectorNum, u8 *src);
+u16 PortableEraseFlashChip(void);
+u16 PortableEraseFlashSector(u16 sectorNum);
+u16 PortableWaitForFlashWrite(u8 phase, u8 *addr, u8 lastData);
+#endif
+
 u16 IdentifyFlash(void)
 {
+#ifdef PORTABLE
+    ProgramFlashByte = PortableProgramFlashByte;
+    ProgramFlashSector = PortableProgramFlashSector;
+    EraseFlashChip = PortableEraseFlashChip;
+    EraseFlashSector = PortableEraseFlashSector;
+    WaitForFlashWrite = PortableWaitForFlashWrite;
+    gFlashMaxTime = MX29L010.maxTime;
+    gFlash = &MX29L010.type;
+    return 0;
+#else
     u16 result;
     u16 flashId;
     const struct FlashSetupInfo *const *setupInfo;
@@ -46,6 +64,7 @@ u16 IdentifyFlash(void)
     gFlash = &(*setupInfo)->type;
 
     return result;
+#endif
 }
 
 u16 WaitForFlashWrite_Common(u8 phase, u8 *addr, u8 lastData)

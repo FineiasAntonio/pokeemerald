@@ -105,14 +105,7 @@ void AgbMain(void)
     InitRFU();
 #endif
     RtcInit();
-#ifdef PORTABLE
-    // ponytail: the host maps save memory as plain RAM, which the chip
-    // identification sequence can't detect. Real detection lands with saving.
-    gFlashMemoryPresent = TRUE;
-    gFlash = &DefaultFlash.type;
-#else
     CheckForFlashMemory();
-#endif
     InitMainCallbacks();
 #ifdef PORTABLE
     {
