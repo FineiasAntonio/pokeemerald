@@ -1044,6 +1044,8 @@ bool8 IsBattleTransitionDone(void)
     if (gTasks[taskId].tTransitionDone)
     {
         DestroyTask(taskId);
+        SetVBlankCallback(NULL);
+        SetHBlankCallback(NULL);
         FREE_AND_SET_NULL(sTransitionData);
         return TRUE;
     }
