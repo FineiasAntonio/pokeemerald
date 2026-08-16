@@ -699,6 +699,7 @@ static bool8 MainState_Exit(void)
     {
         if (sNamingScreen->templateNum == NAMING_SCREEN_PLAYER)
             SeedRngAndSetTrainerId();
+        ResetVHBlank();
         SetMainCallback2(sNamingScreen->returnCallback);
         DestroyTask(FindTaskIdByFunc(Task_NamingScreen));
         FreeAllWindowBuffers();
@@ -2008,6 +2009,8 @@ static void PrintControls(void)
 static void CB2_NamingScreen(void)
 {
     RunTasks();
+    if (!sNamingScreen)
+        return;
     AnimateSprites();
     BuildOamBuffer();
     UpdatePaletteFade();

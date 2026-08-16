@@ -411,7 +411,11 @@ extern char gMaxLines[];
 
 u32 umul3232H32(u32 multiplier, u32 multiplicand);
 void SoundMain(void);
+#ifdef PORTABLE
+void SoundMainBTM(void *dest);
+#else
 void SoundMainBTM(void);
+#endif
 void TrackStop(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track);
 void MPlayMain(struct MusicPlayerInfo *);
 void RealClearChain(void *x);

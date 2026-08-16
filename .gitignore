@@ -44,3 +44,5 @@ prefabs.json
 *.js
 /pokeemerald-*.png
 /pokeemerald_modern-*.png
+/pokeemerald_pc
+pc/sdl32/

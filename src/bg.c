@@ -1238,10 +1238,15 @@ bool32 IsInvalidBg32(u8 bg)
 
 bool32 IsTileMapOutsideWram(u8 bg)
 {
+#ifdef PORTABLE
+    // Tilemap buffers live in the host .bss, not GBA IWRAM/EWRAM.
+    return sGpuBgConfigs2[bg].tilemap == NULL;
+#else
     if (sGpuBgConfigs2[bg].tilemap > (void *)IWRAM_END)
         return TRUE;
     else if (sGpuBgConfigs2[bg].tilemap == NULL)
         return TRUE;
     else
         return FALSE;
+#endif
 }

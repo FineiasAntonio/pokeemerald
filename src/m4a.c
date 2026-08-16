@@ -420,11 +420,13 @@ void SampleFreqSet(u32 freq)
 
     m4aSoundVSyncOn();
 
+#ifndef PORTABLE
     while (*(vu8 *)REG_ADDR_VCOUNT == 159)
         ;
 
     while (*(vu8 *)REG_ADDR_VCOUNT != 159)
         ;
+#endif
 
     REG_TM0CNT_H = TIMER_ENABLE | TIMER_1CLK;
 }
@@ -662,6 +664,11 @@ void MPlayStart(struct MusicPlayerInfo *mplayInfo, struct SongHeader *songHeader
             m4aSoundMode(songHeader->reverb);
 
         mplayInfo->ident = ID_NUMBER;
+#ifdef PORTABLE
+        // SoundMain/MPlayMain are stubs; leave a track bit so BGM-end
+        // checks (title screen) do not treat the song as already finished.
+        mplayInfo->status = 1;
+#endif
     }
 }
 

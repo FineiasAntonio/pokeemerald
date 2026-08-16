@@ -17,6 +17,15 @@
 #include "constants/easy_chat.h"
 #include "constants/trainer_hill.h"
 
+#ifdef PORTABLE
+// Provided by the host layer in pc/host.c.
+void PortableRunFrame(void);
+void PortableFatal(const char *msg);
+void VideoInit(void);
+void VideoScanline(int y);
+void VideoPresent(void);
+#endif
+
 // Prevent cross-jump optimization.
 #define BLOCK_CROSS_JUMP asm("");
 

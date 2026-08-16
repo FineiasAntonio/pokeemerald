@@ -1,3 +1,4 @@
+#include <string.h>
 #include "gba/gba.h"
 #include "gba/flash_internal.h"
 
@@ -138,6 +139,9 @@ void ReadFlash_Core(vu8 *src, u8 *dest, u32 size)
 
 void ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
 {
+#ifdef PORTABLE
+    memcpy(dest, FLASH_BASE + (sectorNum << gFlash->sector.shift) + offset, size);
+#else
     u8 *src;
     u16 i;
     vu16 readFlash_Core_Buffer[0x40];
@@ -170,6 +174,7 @@ void ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
     src = FLASH_BASE + (sectorNum << gFlash->sector.shift) + offset;
 
     readFlash_Core(src, dest, size);
+#endif
 }
 
 u32 VerifyFlashSector_Core(u8 *src, u8 *tgt, u32 size)

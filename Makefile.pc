@@ -1,0 +1,88 @@
+# Host x86-32 build of the game objects (native port, work in progress).
+# Compiles the same sources as the GBA build, minus the hardware layer, so the
+# missing pieces can be measured with `make -f Makefile.pc missing`.
+
+PC_DIR := build/pc
+ASSETS := build/assets
+PREPROC := tools/preproc/preproc
+
+CPPFLAGS := -iquote include -Wno-trigraphs -DMODERN=1 -DPORTABLE=1
+# ARM inline asm is dropped here; the routines it implements are being
+# reimplemented in pc/. Pointers must stay 4 bytes wide for the save layout.
+CFLAGS := -m32 -fno-pic -O1 -w -D'__asm__(...)=' -D'asm(...)='
+ASFLAGS := --32
+
+# Symbols the GBA build gets from the cartridge header and the sound driver.
+DEFSYMS := gMaxLines=0 gNumMusicPlayers=4 \
+           RomHeaderGameCode=0x80000ac RomHeaderSoftwareVersion=0x80000bc \
+           GPIOPortDirection=0x80000c6
+# i386 SDL2: system package, or the tree extracted into pc/sdl32 (no sudo).
+SDL_SYS := $(wildcard /usr/lib/i386-linux-gnu/libSDL2.so)
+SDL_LOCAL := $(wildcard pc/sdl32/usr/include/SDL2/SDL.h)
+ifneq ($(SDL_SYS),)
+  SDL_CFLAGS := -I/usr/include/SDL2
+  SDL_LIBS := -lSDL2
+else ifneq ($(SDL_LOCAL),)
+  SDL_CFLAGS := -Ipc/sdl32/usr/include -Ipc/sdl32/usr/include/SDL2 -Ipc/sdl32/usr/include/i386-linux-gnu -D_REENTRANT
+  SDL_LIBS := -Lpc/sdl32/usr/lib/i386-linux-gnu -lSDL2 -Wl,--disable-new-dtags -Wl,-rpath,'$$ORIGIN/pc/sdl32/usr/lib/i386-linux-gnu' -Wl,-rpath-link,pc/sdl32/usr/lib/i386-linux-gnu
+else
+  $(error SDL2 i386 missing. sudo apt install libsdl2-dev:i386)
+endif
+
+LDFLAGS := -m32 -no-pie -rdynamic $(DEFSYMS:%=-Wl,--defsym,%) -lm $(SDL_LIBS)
+
+C_SRCS := $(shell find src -name '*.c')
+C_OBJS := $(C_SRCS:%.c=$(PC_DIR)/%.o)
+
+DATA_SRCS := $(wildcard data/*.s)
+DATA_OBJS := $(DATA_SRCS:%.s=$(PC_DIR)/%.o)
+
+# Depth 2 and below: the top-level sound/*.s are includes, not translation units.
+SND_SRCS := $(shell find sound -mindepth 2 -name '*.s')
+SND_OBJS := $(SND_SRCS:%.s=$(PC_DIR)/%.o)
+SND_INC := $(PC_DIR)/sndinc
+
+HOST_OBJ := $(PC_DIR)/pc/host.o $(PC_DIR)/pc/video.o
+OBJS := $(C_OBJS) $(DATA_OBJS) $(SND_OBJS)
+GAME := pokeemerald_pc
+
+.PHONY: all objs missing run clean
+all: $(GAME)
+
+objs: $(OBJS)
+
+$(GAME): $(OBJS) $(HOST_OBJ)
+	$(CC) $(OBJS) $(HOST_OBJ) $(LDFLAGS) -o $@
+
+$(PC_DIR)/pc/%.o: pc/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) $(SDL_CFLAGS) -m32 -fno-pic -O1 -g -Wall -c $< -o $@
+
+run: $(GAME)
+	./$(GAME)
+
+$(PC_DIR)/%.o: %.c
+	@mkdir -p $(@D)
+	@cpp $(CPPFLAGS) $< | $(PREPROC) -i -g $(ASSETS) $< charmap.txt | $(CC) $(CFLAGS) -x c -c - -o $@
+
+$(PC_DIR)/data/%.o: data/%.s
+	@mkdir -p $(@D)
+	@$(PREPROC) $< charmap.txt | cpp -I include - | $(PREPROC) -ie $< charmap.txt | as $(ASFLAGS) -o $@
+
+# Sound sources use ARM as: '@' comments, 32-bit .word, power-of-two .align.
+$(PC_DIR)/sound/%.o: sound/%.s | $(SND_INC)
+	@mkdir -p $(@D)
+	@sed -e 's/@.*$$//' -e 's/\.word/.long/g' -e 's/\.align/.p2align/g' $< | as $(ASFLAGS) -I $(SND_INC) -o $@ -
+
+$(SND_INC): $(wildcard sound/*.s)
+	@mkdir -p $@
+	@for f in sound/*.s; do sed 's/@.*$$//' $$f > $@/$$(basename $$f); done
+
+# Symbols the port still has to provide.
+missing: $(OBJS) $(HOST_OBJ)
+	@nm $(OBJS) $(HOST_OBJ) | grep -E '^[0-9a-f]+ [A-TV-Z] ' | awk '{print $$3}' | sort -u > $(PC_DIR)/defined.txt
+	@nm $(OBJS) $(HOST_OBJ) | grep -E '^ +U ' | awk '{print $$2}' | sort -u > $(PC_DIR)/undefined.txt
+	@comm -13 $(PC_DIR)/defined.txt $(PC_DIR)/undefined.txt | tee $(PC_DIR)/missing.txt | wc -l | xargs echo "unresolved symbols:"
+
+clean:
+	rm -rf $(PC_DIR)

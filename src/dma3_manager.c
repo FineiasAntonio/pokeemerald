@@ -53,10 +53,12 @@ void ProcessDma3Requests(void)
     {
         bytesTransferred += sDma3Requests[sDma3RequestCursor].size;
 
+#ifndef PORTABLE
         if (bytesTransferred > 40 * 1024)
             return; // don't transfer more than 40 KiB
         if (*(u8 *)REG_ADDR_VCOUNT > 224)
             return; // we're about to leave vblank, stop
+#endif
 
         switch (sDma3Requests[sDma3RequestCursor].mode)
         {
@@ -117,6 +119,9 @@ s16 RequestDma3Copy(const void *src, void *dest, u16 size, u8 mode)
                 sDma3Requests[cursor].mode = DMA_REQUEST_COPY16;
 
             sDma3ManagerLocked = FALSE;
+#ifdef PORTABLE
+            ProcessDma3Requests();
+#endif
             return cursor;
         }
         if (++cursor >= MAX_DMA_REQUESTS) // loop back to start.
@@ -150,6 +155,9 @@ s16 RequestDma3Fill(s32 value, void *dest, u16 size, u8 mode)
                 sDma3Requests[cursor].mode = DMA_REQUEST_FILL16;
 
             sDma3ManagerLocked = FALSE;
+#ifdef PORTABLE
+            ProcessDma3Requests();
+#endif
             return cursor;
         }
         if (++cursor >= MAX_DMA_REQUESTS) // loop back to start.

@@ -14,6 +14,7 @@
 #include "dma3.h"
 #include "gba/flash_internal.h"
 #include "load_save.h"
+#include "new_game.h"
 #include "gpu_regs.h"
 #include "agb_flash.h"
 #include "sound.h"
@@ -100,10 +101,30 @@ void AgbMain(void)
     InitIntrHandlers();
     m4aSoundInit();
     EnableVCountIntrAtLine150();
+#ifndef PORTABLE
     InitRFU();
+#endif
     RtcInit();
+#ifdef PORTABLE
+    // ponytail: the host maps save memory as plain RAM, which the chip
+    // identification sequence can't detect. Real detection lands with saving.
+    gFlashMemoryPresent = TRUE;
+    gFlash = &DefaultFlash.type;
+#else
     CheckForFlashMemory();
+#endif
     InitMainCallbacks();
+#ifdef PORTABLE
+    {
+        extern int gPortableSkipToNewGame;
+        if (gPortableSkipToNewGame)
+        {
+            SetSaveBlocksPointers(0);
+            Sav2_ClearSetDefault();
+            SetMainCallback2(CB2_NewGame);
+        }
+    }
+#endif
     InitMapMusic();
 #ifdef BUGFIX
     SeedRngWithRtc(); // see comment at SeedRngWithRtc definition below
@@ -409,10 +430,16 @@ static void IntrDummy(void)
 
 static void WaitForVBlank(void)
 {
+#ifdef PORTABLE
+    // Nothing runs asynchronously on the host, so the frame is advanced here
+    // instead of spinning until an interrupt sets the flag.
+    PortableRunFrame();
+#else
     gMain.intrCheck &= ~INTR_FLAG_VBLANK;
 
     while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
         ;
+#endif
 }
 
 void SetTrainerHillVBlankCounter(u32 *counter)

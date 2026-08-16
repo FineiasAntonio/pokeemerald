@@ -102,8 +102,12 @@ bool8 RunScriptCommand(struct ScriptContext *ctx)
 
             if (ctx->scriptPtr == gNullScriptPtr)
             {
+#ifdef PORTABLE
+                PortableFatal("ran the null script");
+#else
                 while (1)
                     asm("svc 2"); // HALT
+#endif
             }
 
             cmdCode = *(ctx->scriptPtr);

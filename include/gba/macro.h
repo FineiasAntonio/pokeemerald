@@ -54,6 +54,14 @@
 
 #define CpuFastCopy(src, dest, size) CpuFastSet(src, dest, ((size)/(32/8) & 0x1FFFFF))
 
+#ifdef PORTABLE
+// The native build has no DMA controller, so every transfer runs as a copy.
+void PortableDma(const void *src, void *dest, u32 control);
+
+// Callers pass either pointers or raw addresses, as the register write did.
+#define DmaSetUnchecked(dmaNum, src, dest, control) \
+    PortableDma((const void *)(u32)(src), (void *)(u32)(dest), control)
+#else
 #define DmaSetUnchecked(dmaNum, src, dest, control) \
 {                                                 \
     vu32 *dmaRegs = (vu32 *)REG_ADDR_DMA##dmaNum; \
@@ -62,6 +70,7 @@
     dmaRegs[2] = (vu32)(control);                 \
     dmaRegs[2];                                   \
 }
+#endif
 
 #if MODERN
 // NOTE: Assumes 16-bit DMAs.
