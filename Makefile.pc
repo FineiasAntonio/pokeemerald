@@ -42,7 +42,7 @@ SND_SRCS := $(shell find sound -mindepth 2 -name '*.s')
 SND_OBJS := $(SND_SRCS:%.s=$(PC_DIR)/%.o)
 SND_INC := $(PC_DIR)/sndinc
 
-HOST_OBJ := $(PC_DIR)/pc/host.o $(PC_DIR)/pc/video.o
+HOST_OBJ := $(PC_DIR)/pc/host.o $(PC_DIR)/pc/video.o $(PC_DIR)/pc/m4a_1.o $(PC_DIR)/pc/audio.o
 OBJS := $(C_OBJS) $(DATA_OBJS) $(SND_OBJS)
 GAME := pokeemerald_pc
 

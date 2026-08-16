@@ -664,11 +664,6 @@ void MPlayStart(struct MusicPlayerInfo *mplayInfo, struct SongHeader *songHeader
             m4aSoundMode(songHeader->reverb);
 
         mplayInfo->ident = ID_NUMBER;
-#ifdef PORTABLE
-        // SoundMain/MPlayMain are stubs; leave a track bit so BGM-end
-        // checks (title screen) do not treat the song as already finished.
-        mplayInfo->status = 1;
-#endif
     }
 }
 

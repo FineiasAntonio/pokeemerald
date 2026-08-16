@@ -19,6 +19,9 @@
 #include "main.h"
 #include "gba/m4a_internal.h"
 
+void VideoPoll(void);
+int VideoFastForward(void);
+
 #undef CpuSet
 #undef CpuFastSet
 
@@ -100,6 +103,8 @@ static void CallIntr(u32 index)
 // interrupts, then returns to the game as if it had just woken up.
 void PortableRunFrame(void)
 {
+    int draw = !VideoFastForward() || (sFrameCount & 3) == 0;
+
     for (u32 line = 0; line < SCANLINES_TOTAL; line++)
     {
         REG_VCOUNT = line;
@@ -110,7 +115,7 @@ void PortableRunFrame(void)
         if (line < SCANLINES_VISIBLE && (REG_IE & INTR_FLAG_HBLANK))
             CallIntr(INTR_INDEX_HBLANK);
 
-        if (line < SCANLINES_VISIBLE)
+        if (line < SCANLINES_VISIBLE && draw)
             VideoScanline(line);
 
         if (line == (REG_DISPSTAT >> 8) && (REG_IE & INTR_FLAG_VCOUNT))
@@ -130,7 +135,10 @@ void PortableRunFrame(void)
     REG_VCOUNT = 200;
 
     sFrameCount++;
-    VideoPresent();
+    if (draw)
+        VideoPresent();
+    else
+        VideoPoll();
 
     if (sFrameLimit && sFrameCount >= sFrameLimit)
     {
@@ -377,59 +385,6 @@ int MultiBoot(struct MultiBootParam *mp)
 {
     return 1; // no link cable to boot over
 }
-
-// Sound mixer stubs. The real ones live in src/m4a_1.s as ARM assembly and are
-// being rewritten in C along with the audio output.
-
-char SoundMainRAM[0x800];
-
-void SoundMain(void) {}
-void MPlayMain(struct MusicPlayerInfo *mplayInfo) {}
-
-extern void *const gMPlayJumpTableTemplate[];
-
-void MPlayJumpTableCopy(MPlayFunc *mplayJumpTable)
-{
-    memcpy(mplayJumpTable, gMPlayJumpTableTemplate, 36 * sizeof(void *));
-}
-
-void SoundMainBTM(void *dest)
-{
-    memset(dest, 0, 64);
-}
-void TrackStop(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
-void RealClearChain(void *x) {}
-void m4aSoundVSync(void) {}
-
-u32 umul3232H32(u32 multiplier, u32 multiplicand)
-{
-    return (u32)(((u64)multiplier * multiplicand) >> 32);
-}
-
-#define PLY_STUB(name) void name(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
-
-PLY_STUB(ply_fine)
-PLY_STUB(ply_goto)
-PLY_STUB(ply_patt)
-PLY_STUB(ply_pend)
-PLY_STUB(ply_rept)
-PLY_STUB(ply_prio)
-PLY_STUB(ply_tempo)
-PLY_STUB(ply_keysh)
-PLY_STUB(ply_voice)
-PLY_STUB(ply_vol)
-PLY_STUB(ply_pan)
-PLY_STUB(ply_bend)
-PLY_STUB(ply_bendr)
-PLY_STUB(ply_lfos)
-PLY_STUB(ply_lfodl)
-PLY_STUB(ply_mod)
-PLY_STUB(ply_modt)
-PLY_STUB(ply_tune)
-PLY_STUB(ply_port)
-PLY_STUB(ply_endtie)
-
-void ply_note(u32 note_cmd, struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
 
 // GameCube link boot, unreachable without a cable.
 

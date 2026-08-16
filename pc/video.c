@@ -298,6 +298,17 @@ void VideoScanline(int y)
 static SDL_Window *sWin;
 static SDL_Renderer *sRen;
 static SDL_Texture *sTex;
+static int sZoom = 1; // 1, 2, 3
+static int sPanX, sPanY;
+static int sFast;
+
+extern bool8 gUnusedBikeCameraAheadPanback;
+
+static void RecenterPan(void)
+{
+    sPanX = (FB_W - FB_W / sZoom) / 2;
+    sPanY = (FB_H - FB_H / sZoom) / 2;
+}
 
 static void PollInput(void)
 {
@@ -307,11 +318,39 @@ static void PollInput(void)
     {
         if (e.type == SDL_QUIT)
             exit(0);
-        if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE)
+        if (e.type != SDL_KEYDOWN || e.key.repeat)
+            continue;
+        if (e.key.keysym.sym == SDLK_ESCAPE)
             exit(0);
+        if (e.key.keysym.sym == SDLK_TAB)
+        {
+            sZoom = sZoom == 3 ? 1 : sZoom + 1;
+            RecenterPan();
+        }
+        if (e.key.keysym.sym == SDLK_c)
+            gUnusedBikeCameraAheadPanback ^= 1;
+        if (e.key.keysym.sym == SDLK_HOME)
+        {
+            sZoom = 1;
+            RecenterPan();
+            gUnusedBikeCameraAheadPanback = FALSE;
+        }
     }
 
     const Uint8 *k = SDL_GetKeyboardState(NULL);
+    int fast = k[SDL_SCANCODE_F];
+    if (fast != sFast)
+    {
+        sFast = fast;
+        SDL_RenderSetVSync(sRen, sFast ? 0 : 1);
+    }
+    if (sZoom > 1)
+    {
+        if (k[SDL_SCANCODE_I]) sPanY--;
+        if (k[SDL_SCANCODE_K]) sPanY++;
+        if (k[SDL_SCANCODE_J]) sPanX--;
+        if (k[SDL_SCANCODE_L]) sPanX++;
+    }
     u16 keys = KEYS_MASK;
 
     if (k[SDL_SCANCODE_Z]) keys &= ~A_BUTTON;
@@ -330,9 +369,20 @@ static void PollInput(void)
 void VideoPresent(void)
 {
     PollInput();
+
+    int zw = FB_W / sZoom;
+    int zh = FB_H / sZoom;
+    if (sPanX < 0) sPanX = 0;
+    if (sPanY < 0) sPanY = 0;
+    if (sPanX > FB_W - zw) sPanX = FB_W - zw;
+    if (sPanY > FB_H - zh) sPanY = FB_H - zh;
+
+    SDL_Rect src = { sPanX, sPanY, zw, zh };
+
+    SDL_RenderSetLogicalSize(sRen, FB_W, FB_H);
     SDL_UpdateTexture(sTex, NULL, sRgb, FB_W * 3);
     SDL_RenderClear(sRen);
-    SDL_RenderCopy(sRen, sTex, NULL, NULL);
+    SDL_RenderCopy(sRen, sTex, sZoom == 1 ? NULL : &src, NULL);
     SDL_RenderPresent(sRen);
 }
 
@@ -340,7 +390,7 @@ void VideoInit(void)
 {
     memset(sRgb, 0, sizeof(sRgb));
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
-    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
         PortableFatal(SDL_GetError());
     sWin = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 720, 480, SDL_WINDOW_RESIZABLE);
     sRen = SDL_CreateRenderer(sWin, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -350,4 +400,14 @@ void VideoInit(void)
     sTex = SDL_CreateTexture(sRen, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, FB_W, FB_H);
     if (!sTex)
         PortableFatal(SDL_GetError());
+}
+
+void VideoPoll(void)
+{
+    PollInput();
+}
+
+int VideoFastForward(void)
+{
+    return sFast;
 }
