@@ -294,9 +294,14 @@ void FadeOutBGM(u8 speed)
 
 bool8 IsBGMStopped(void)
 {
+#ifdef PORTABLE
+    // Mixer is a stub; TRACK bits never clear after MPlayStart.
+    return TRUE;
+#else
     if (!(gMPlayInfo_BGM.status & MUSICPLAYER_STATUS_TRACK))
         return TRUE;
     return FALSE;
+#endif
 }
 
 void PlayCry_Normal(u16 species, s8 pan)
