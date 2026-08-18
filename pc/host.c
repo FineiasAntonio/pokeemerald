@@ -22,6 +22,7 @@
 
 void VideoPoll(void);
 int VideoFastForward(void);
+void VideoPace(void);
 
 #undef CpuSet
 #undef CpuFastSet
@@ -154,6 +155,7 @@ void PortableRunFrame(void)
         VideoPresent();
     else
         VideoPoll();
+    VideoPace();
 
     if (sFrameLimit && sFrameCount >= sFrameLimit)
     {

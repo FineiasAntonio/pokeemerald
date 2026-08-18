@@ -159,8 +159,8 @@ MAKEFLAGS += --no-print-directory
 # Delete files that weren't built properly
 .DELETE_ON_ERROR:
 
-RULES_NO_SCAN += libagbsyscall clean clean-assets tidy tidymodern tidynonmodern generated clean-generated
-.PHONY: all rom modern compare
+RULES_NO_SCAN += libagbsyscall clean clean-assets tidy tidymodern tidynonmodern tidy-native generated clean-generated native run-native
+.PHONY: all rom modern compare native run-native tidy-native
 .PHONY: $(RULES_NO_SCAN)
 
 infoshell = $(foreach line, $(shell $1 | sed "s/ /__SPACE__/g"), $(info $(subst __SPACE__, ,$(line))))
@@ -240,7 +240,7 @@ clean-assets:
 	find . \( -iname '*.1bpp' -o -iname '*.4bpp' -o -iname '*.8bpp' -o -iname '*.gbapal' -o -iname '*.lz' -o -iname '*.rl' -o -iname '*.latfont' -o -iname '*.hwjpnfont' -o -iname '*.fwjpnfont' \) -exec rm {} +
 	find $(DATA_ASM_SUBDIR)/maps \( -iname 'connections.inc' -o -iname 'events.inc' -o -iname 'header.inc' \) -exec rm {} +
 
-tidy: tidynonmodern tidymodern
+tidy: tidynonmodern tidymodern tidy-native
 
 tidynonmodern:
 	rm -f $(ROM_NAME) $(ELF_NAME) $(MAP_NAME)
@@ -255,6 +255,22 @@ include graphics_file_rules.mk
 include map_data_rules.mk
 include json_data_rules.mk
 include audio_rules.mk
+
+# Host x86-32 SDL port. Kept in Makefile.pc so its CFLAGS/ASFLAGS don't collide
+# with the GBA toolchain. `make run-native` builds tools, map/audio assets, then the binary.
+NATIVE_WAV_BINS := $(patsubst %.wav,%.bin,$(wildcard sound/direct_sound_samples/*.wav sound/direct_sound_samples/cries/*.wav sound/direct_sound_samples/phonemes/*.wav))
+
+native: tools generated
+	$(MAKE) $(MAP_HEADERS) $(MAP_EVENTS) $(MAP_CONNECTIONS)
+	$(MAKE) $(MID_SRCS:.mid=.s) $(NATIVE_WAV_BINS)
+	$(MAKE) -f Makefile.pc
+
+run-native: native
+	./pokeemerald_pc
+
+tidy-native:
+	$(MAKE) -f Makefile.pc clean
+	$(RM) pokeemerald_pc
 
 # NOTE: Tools must have been built prior (FIXME)
 # so you can't really call this rule directly

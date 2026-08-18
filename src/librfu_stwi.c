@@ -66,8 +66,12 @@ void AgbRFU_SoftReset(void)
     *timerH = 0;
     *timerL = 0;
     *timerH = TIMER_ENABLE | TIMER_1024CLK;
+#ifdef PORTABLE
+    // IO is mmap RAM on the host; the timer counter never advances.
+#else
     while (*timerL <= 0x11)
         REG_RCNT = 0x80A2;
+#endif
     *timerH = 3;
     REG_RCNT = 0x80A0;
     REG_SIOCNT = SIO_INTR_ENABLE | SIO_32BIT_MODE | SIO_115200_BPS;
@@ -136,8 +140,16 @@ void STWI_set_Callback_ID(void (*func)(void)) // name in SDK, but is actually se
 
 u16 STWI_poll_CommandEnd(void)
 {
+#ifdef PORTABLE
+    if (gSTWIStatus->sending == 1)
+    {
+        gSTWIStatus->sending = 0;
+        gSTWIStatus->error = ERR_REQ_CMD_IME_DISABLE;
+    }
+#else
     while (gSTWIStatus->sending == 1)
         ;
+#endif
     return gSTWIStatus->error;
 }
 

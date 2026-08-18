@@ -22,6 +22,10 @@ static const char Sio32IDLib_Var[] = "Sio32ID_030820";
 
 s32 AgbRFU_checkID(u8 maxTries)
 {
+#ifdef PORTABLE
+    (void)maxTries;
+    return 0; // no wireless adapter
+#else
     u16 ieBak;
     vu16 *regTMCNTL;
     s32 id;
@@ -54,6 +58,7 @@ s32 AgbRFU_checkID(u8 maxTries)
     gSTWIStatus->state = 0;
     STWI_set_Callback_ID(NULL);
     return id;
+#endif
 }
 
 static void Sio32IDInit(void)

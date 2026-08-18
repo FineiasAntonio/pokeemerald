@@ -1,14 +1,10 @@
-# Host x86-32 build of the game objects (native port, work in progress).
-# Compiles the same sources as the GBA build, minus the hardware layer, so the
-# missing pieces can be measured with `make -f Makefile.pc missing`.
-
 PC_DIR := build/pc
 ASSETS := build/assets
 PREPROC := tools/preproc/preproc
+GFX := tools/gbagfx/gbagfx
+SCANINC := tools/scaninc/scaninc
 
 CPPFLAGS := -iquote include -Wno-trigraphs -DMODERN=1 -DPORTABLE=1
-# ARM inline asm is dropped here; the routines it implements are being
-# reimplemented in pc/. Pointers must stay 4 bytes wide for the save layout.
 CFLAGS := -m32 -fno-pic -O1 -w -D'__asm__(...)=' -D'asm(...)='
 ASFLAGS := --32
 
@@ -16,17 +12,21 @@ ASFLAGS := --32
 DEFSYMS := gMaxLines=0 gNumMusicPlayers=4 \
            RomHeaderGameCode=0x80000ac RomHeaderSoftwareVersion=0x80000bc \
            GPIOPortDirection=0x80000c6
-# i386 SDL2: system package, or the tree extracted into pc/sdl32 (no sudo).
-SDL_SYS := $(wildcard /usr/lib/i386-linux-gnu/libSDL2.so)
+# i386 SDL2: Debian multiarch, Fedora /usr/lib, or the tree extracted into pc/sdl32 (no sudo).
+SDL_DEB := $(wildcard /usr/lib/i386-linux-gnu/libSDL2.so)
+SDL_FEDORA := $(wildcard /usr/lib/libSDL2.so)
 SDL_LOCAL := $(wildcard pc/sdl32/usr/include/SDL2/SDL.h)
-ifneq ($(SDL_SYS),)
+ifneq ($(SDL_DEB),)
+  SDL_CFLAGS := -I/usr/include/SDL2
+  SDL_LIBS := -lSDL2
+else ifneq ($(SDL_FEDORA),)
   SDL_CFLAGS := -I/usr/include/SDL2
   SDL_LIBS := -lSDL2
 else ifneq ($(SDL_LOCAL),)
   SDL_CFLAGS := -Ipc/sdl32/usr/include -Ipc/sdl32/usr/include/SDL2 -Ipc/sdl32/usr/include/i386-linux-gnu -D_REENTRANT
   SDL_LIBS := -Lpc/sdl32/usr/lib/i386-linux-gnu -lSDL2 -Wl,--disable-new-dtags -Wl,-rpath,'$$ORIGIN/pc/sdl32/usr/lib/i386-linux-gnu' -Wl,-rpath-link,pc/sdl32/usr/lib/i386-linux-gnu
 else
-  $(error SDL2 i386 missing. sudo apt install libsdl2-dev:i386)
+  $(error SDL2 i386 missing. sudo apt install libsdl2-dev:i386  OR  sudo dnf install sdl2-compat-devel.i686)
 endif
 
 LDFLAGS := -m32 -no-pie -rdynamic $(DEFSYMS:%=-Wl,--defsym,%) -lm $(SDL_LIBS)
@@ -78,6 +78,29 @@ $(SND_INC): $(wildcard sound/*.s)
 	@mkdir -p $@
 	@for f in sound/*.s; do sed 's/@.*$$//' $$f > $@/$$(basename $$f); done
 
+# INCGFX: same pipeline as the GBA makefile. scaninc writes conversion
+# rules into .d files; gbagfx fills $(ASSETS); composites live in graphics_file_rules.mk.
+%.png: ;
+%.pal: ;
+%.bin: ;
+%.1bpp:   %.png  ; $(GFX) $< $@
+%.4bpp:   %.png  ; $(GFX) $< $@
+%.8bpp:   %.png  ; $(GFX) $< $@
+%.gbapal: %.pal  ; $(GFX) $< $@
+%.gbapal: %.png  ; $(GFX) $< $@
+%.lz:     %      ; $(GFX) $< $@
+%.rl:     %      ; $(GFX) $< $@
+
+include graphics_file_rules.mk
+
+$(PC_DIR)/%.d: %.c
+	@mkdir -p $(@D)
+	$(SCANINC) -M $@ -g $(ASSETS) -I include $<
+
+ifneq ($(NODEP),1)
+-include $(C_SRCS:%.c=$(PC_DIR)/%.d)
+endif
+
 # Symbols the port still has to provide.
 missing: $(OBJS) $(HOST_OBJ)
 	@nm $(OBJS) $(HOST_OBJ) | grep -E '^[0-9a-f]+ [A-TV-Z] ' | awk '{print $$3}' | sort -u > $(PC_DIR)/defined.txt
@@ -85,4 +108,4 @@ missing: $(OBJS) $(HOST_OBJ)
 	@comm -13 $(PC_DIR)/defined.txt $(PC_DIR)/undefined.txt | tee $(PC_DIR)/missing.txt | wc -l | xargs echo "unresolved symbols:"
 
 clean:
-	rm -rf $(PC_DIR)
+	rm -rf $(PC_DIR) $(GAME)

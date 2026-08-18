@@ -291,6 +291,13 @@ static void ReadKeys(void)
     gMain.heldKeysRaw = keyInput;
     gMain.heldKeys = gMain.heldKeysRaw;
 
+#ifdef PORTABLE
+    {
+        extern void VideoConsumeKeys(void);
+        VideoConsumeKeys();
+    }
+#endif
+
     // Remap L to A if the L=A option is enabled.
     if (gSaveBlock2Ptr->optionsButtonMode == OPTIONS_BUTTON_MODE_L_EQUALS_A)
     {

@@ -378,8 +378,10 @@ void rfu_REQ_stopMode(void)
             timerReg = &REG_TMCNT(gSTWIStatus->timerSelect);
             *timerReg = 0;
             *timerReg = (TIMER_ENABLE | TIMER_1024CLK) << 16;
+#ifndef PORTABLE
             while (*timerReg << 16 < 262 << 16)
                 ;
+#endif
             *timerReg = 0;
             STWI_set_Callback_M(rfu_CB_stopMode);
             STWI_send_StopModeREQ();

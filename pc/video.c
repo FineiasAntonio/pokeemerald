@@ -301,6 +301,8 @@ static SDL_Texture *sTex;
 static int sZoom = 1; // 1, 2, 3
 static int sPanX, sPanY;
 static int sFast;
+static u16 sHeld;    // currently down, active high
+static u16 sLatched; // KEYDOWN since last ReadKeys, so taps during wait still count
 
 extern bool8 gUnusedBikeCameraAheadPanback;
 
@@ -308,6 +310,36 @@ static void RecenterPan(void)
 {
     sPanX = (FB_W - FB_W / sZoom) / 2;
     sPanY = (FB_H - FB_H / sZoom) / 2;
+}
+
+static u16 MapButton(SDL_Scancode sc, SDL_Keycode sym)
+{
+    if (sc == SDL_SCANCODE_Z || sym == SDLK_z)
+        return A_BUTTON;
+    if (sc == SDL_SCANCODE_X || sym == SDLK_x)
+        return B_BUTTON;
+    if (sc == SDL_SCANCODE_BACKSPACE || sym == SDLK_BACKSPACE)
+        return SELECT_BUTTON;
+    if (sc == SDL_SCANCODE_RETURN || sc == SDL_SCANCODE_KP_ENTER || sym == SDLK_RETURN)
+        return START_BUTTON;
+    if (sc == SDL_SCANCODE_RIGHT || sym == SDLK_RIGHT)
+        return DPAD_RIGHT;
+    if (sc == SDL_SCANCODE_LEFT || sym == SDLK_LEFT)
+        return DPAD_LEFT;
+    if (sc == SDL_SCANCODE_UP || sym == SDLK_UP)
+        return DPAD_UP;
+    if (sc == SDL_SCANCODE_DOWN || sym == SDLK_DOWN)
+        return DPAD_DOWN;
+    if (sc == SDL_SCANCODE_S || sym == SDLK_s)
+        return R_BUTTON;
+    if (sc == SDL_SCANCODE_A || sym == SDLK_a)
+        return L_BUTTON;
+    return 0;
+}
+
+static void PublishKeys(void)
+{
+    REG_KEYINPUT = KEYS_MASK & ~(sHeld | sLatched);
 }
 
 static void PollInput(void)
@@ -318,22 +350,41 @@ static void PollInput(void)
     {
         if (e.type == SDL_QUIT)
             exit(0);
-        if (e.type != SDL_KEYDOWN || e.key.repeat)
+        if (e.type != SDL_KEYDOWN && e.type != SDL_KEYUP)
             continue;
-        if (e.key.keysym.sym == SDLK_ESCAPE)
-            exit(0);
-        if (e.key.keysym.sym == SDLK_TAB)
+        if (e.key.repeat)
+            continue;
+
+        if (e.type == SDL_KEYDOWN)
         {
-            sZoom = sZoom == 3 ? 1 : sZoom + 1;
-            RecenterPan();
+            if (e.key.keysym.sym == SDLK_ESCAPE)
+                exit(0);
+            if (e.key.keysym.sym == SDLK_TAB)
+            {
+                sZoom = sZoom == 3 ? 1 : sZoom + 1;
+                RecenterPan();
+            }
+            if (e.key.keysym.sym == SDLK_c)
+                gUnusedBikeCameraAheadPanback ^= 1;
+            if (e.key.keysym.sym == SDLK_HOME)
+            {
+                sZoom = 1;
+                RecenterPan();
+                gUnusedBikeCameraAheadPanback = FALSE;
+            }
         }
-        if (e.key.keysym.sym == SDLK_c)
-            gUnusedBikeCameraAheadPanback ^= 1;
-        if (e.key.keysym.sym == SDLK_HOME)
+
+        u16 b = MapButton(e.key.keysym.scancode, e.key.keysym.sym);
+        if (!b)
+            continue;
+        if (e.type == SDL_KEYDOWN)
         {
-            sZoom = 1;
-            RecenterPan();
-            gUnusedBikeCameraAheadPanback = FALSE;
+            sHeld |= b;
+            sLatched |= b;
+        }
+        else
+        {
+            sHeld &= ~b;
         }
     }
 
@@ -351,19 +402,13 @@ static void PollInput(void)
         if (k[SDL_SCANCODE_J]) sPanX--;
         if (k[SDL_SCANCODE_L]) sPanX++;
     }
-    u16 keys = KEYS_MASK;
+    PublishKeys();
+}
 
-    if (k[SDL_SCANCODE_Z]) keys &= ~A_BUTTON;
-    if (k[SDL_SCANCODE_X]) keys &= ~B_BUTTON;
-    if (k[SDL_SCANCODE_BACKSPACE]) keys &= ~SELECT_BUTTON;
-    if (k[SDL_SCANCODE_RETURN]) keys &= ~START_BUTTON;
-    if (k[SDL_SCANCODE_RIGHT]) keys &= ~DPAD_RIGHT;
-    if (k[SDL_SCANCODE_LEFT]) keys &= ~DPAD_LEFT;
-    if (k[SDL_SCANCODE_UP]) keys &= ~DPAD_UP;
-    if (k[SDL_SCANCODE_DOWN]) keys &= ~DPAD_DOWN;
-    if (k[SDL_SCANCODE_S]) keys &= ~R_BUTTON;
-    if (k[SDL_SCANCODE_A]) keys &= ~L_BUTTON;
-    REG_KEYINPUT = keys;
+void VideoConsumeKeys(void)
+{
+    sLatched = 0;
+    PublishKeys();
 }
 
 void VideoPresent(void)
@@ -410,4 +455,41 @@ void VideoPoll(void)
 int VideoFastForward(void)
 {
     return sFast;
+}
+
+// GBA frame is 280896 cycles at 16*1024*1024 Hz (~59.727 Hz). Vsync follows
+// the monitor, so a 180 Hz display would run the game at 3x without this.
+void VideoPace(void)
+{
+    static Uint64 sNext;
+    Uint64 freq = SDL_GetPerformanceFrequency();
+    Uint64 period = (freq * 280896ull) / 16777216ull;
+    Uint64 now = SDL_GetPerformanceCounter();
+
+    if (sFast)
+    {
+        sNext = 0;
+        return;
+    }
+
+    if (sNext == 0)
+        sNext = now;
+
+    if (now < sNext)
+    {
+        while (SDL_GetPerformanceCounter() < sNext)
+        {
+            PollInput();
+            Uint64 cur = SDL_GetPerformanceCounter();
+            if (cur >= sNext)
+                break;
+            if ((sNext - cur) * 1000 / freq > 1)
+                SDL_Delay(1);
+        }
+        now = SDL_GetPerformanceCounter();
+    }
+
+    sNext += period;
+    if (now >= sNext + period)
+        sNext = now;
 }
